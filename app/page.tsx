@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle, Download, Search, Settings, XCircle } from "lucide-react";
+import { track } from "@vercel/analytics";
 import isEqual from "lodash/isEqual";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -592,6 +593,8 @@ export default function HomePage() {
         next[slotIndex] = { fileName, error: null };
         return next;
       });
+
+      track("file_uploaded", { slotIndex });
     } catch {
       setContainers((prev) => {
         const next = [...prev] as ContainerState;
@@ -615,6 +618,7 @@ export default function HomePage() {
   };
 
   const exportToCSV = () => {
+    track("csv_exported");
     const formatForCSV = (val: unknown): string => {
       if (val === undefined || val === null) return '""';
       const strVal = typeof val === "object" ? JSON.stringify(val) : String(val);
@@ -728,7 +732,7 @@ export default function HomePage() {
           </button>
           <button
             type="button"
-            onClick={() => setShowSettingsModal(true)}
+            onClick={() => { track("event_settings_audited"); setShowSettingsModal(true); }}
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
           >
             <Settings className="h-4 w-4" />
