@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle, Download, Search, Settings, XCircle } from "lucide-react";
-import { track } from "@vercel/analytics";
+import { sendGAEvent } from "@next/third-parties/google";
 import isEqual from "lodash/isEqual";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -594,7 +594,7 @@ export default function HomePage() {
         return next;
       });
 
-      track("file_uploaded", { slotIndex });
+      sendGAEvent("event", "file_uploaded", { upload_slot: slotIndex });
     } catch {
       setContainers((prev) => {
         const next = [...prev] as ContainerState;
@@ -618,7 +618,7 @@ export default function HomePage() {
   };
 
   const exportToCSV = () => {
-    track("csv_exported");
+    sendGAEvent("event", "csv_exported");
     const formatForCSV = (val: unknown): string => {
       if (val === undefined || val === null) return '""';
       const strVal = typeof val === "object" ? JSON.stringify(val) : String(val);
@@ -732,7 +732,7 @@ export default function HomePage() {
           </button>
           <button
             type="button"
-            onClick={() => { track("event_settings_audited"); setShowSettingsModal(true); }}
+            onClick={() => { sendGAEvent("event", "event_settings_audited"); setShowSettingsModal(true); }}
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
           >
             <Settings className="h-4 w-4" />
@@ -1135,6 +1135,16 @@ export default function HomePage() {
           </div>
         </div>
       ) : null}
+
+      <footer className="mt-16 space-y-2 px-4 pb-8 text-center text-xs text-gray-400">
+        <p>
+          <strong>GTM Container Diff Tool v1.1.0</strong> • Built for the analytics community.
+        </p>
+        <p className="mx-auto max-w-2xl">
+          <strong>Privacy Note:</strong> This tool runs 100% in your browser. We use basic, anonymized web analytics to
+          count visits and button clicks. We never collect PII, and your GTM container data never leaves your machine.
+        </p>
+      </footer>
     </main>
   );
 }
