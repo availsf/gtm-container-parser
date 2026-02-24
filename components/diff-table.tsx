@@ -12,9 +12,14 @@ type DiffTableProps = {
   onEventClick?: (eventKey: string) => void;
 };
 
-type DiffCompareStatus = "NONE" | "MISSING" | "MATCHED" | "MISMATCHED";
+type DiffCompareStatus = "NONE" | "MISSING" | "MATCHED" | "MISMATCHED" | "IGNORED";
 
-function getDiffStatus(baselineValue: unknown, comparedValue: unknown): DiffCompareStatus {
+const IGNORED_PARAM_KEYS = new Set(["measurementId", "tagId", "tag_id"]);
+
+function getDiffStatus(baselineValue: unknown, comparedValue: unknown, paramKey?: string | null): DiffCompareStatus {
+  if (paramKey && IGNORED_PARAM_KEYS.has(paramKey)) {
+    return "IGNORED";
+  }
   if (baselineValue === undefined && comparedValue === undefined) {
     return "NONE";
   }
@@ -35,6 +40,8 @@ function getStatusStyles(status: DiffCompareStatus): string {
       return "bg-yellow-50 text-yellow-800 border-yellow-200";
     case "MATCHED":
       return "bg-green-50 text-green-800 border-green-200";
+    case "IGNORED":
+      return "bg-slate-50 text-slate-500 border-slate-200 italic";
     default:
       return "bg-transparent text-slate-700 border-slate-100";
   }
@@ -58,11 +65,13 @@ export function DiffTable({ rows, showOnlyDifferences, slotNames, loadedSlots, c
     const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
     const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
 
-    if (loadedSlots[1] && getDiffStatus(baselineVal, slot2Val) !== "MATCHED") {
-      return true;
+    if (loadedSlots[1]) {
+      const s2 = getDiffStatus(baselineVal, slot2Val, parameter.parameterKey);
+      if (s2 !== "MATCHED" && s2 !== "IGNORED") return true;
     }
-    if (loadedSlots[2] && getDiffStatus(baselineVal, slot3Val) !== "MATCHED") {
-      return true;
+    if (loadedSlots[2]) {
+      const s3 = getDiffStatus(baselineVal, slot3Val, parameter.parameterKey);
+      if (s3 !== "MATCHED" && s3 !== "IGNORED") return true;
     }
     return false;
   };
@@ -124,8 +133,8 @@ export function DiffTable({ rows, showOnlyDifferences, slotNames, loadedSlots, c
                       const baselineVal = slot1Cell.value === null ? undefined : slot1Cell.value;
                       const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
                       const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-                      const status2 = getDiffStatus(baselineVal, slot2Val);
-                      const status3 = getDiffStatus(baselineVal, slot3Val);
+                      const status2 = getDiffStatus(baselineVal, slot2Val, parameter.parameterKey);
+                      const status3 = getDiffStatus(baselineVal, slot3Val, parameter.parameterKey);
 
                       return (
                         <tr key={`${row.eventName}-${parameter.parameterKey}`}>

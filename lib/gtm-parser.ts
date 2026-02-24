@@ -301,13 +301,10 @@ export function extractGA4Data(container: unknown): ExtractedGA4Tag[] {
     const baseEventName = eventName || `UNNAMED: ${tagName}`;
     const baseConfigIdentity = `CONFIG: ${configId || "UNKNOWN"}`;
 
+    const configTypes = ["awct", "gaawc", "googtag", "smc"];
     let rowIdentity = baseEventName;
-    if (isGoogleTag) {
-      configIdCounts[baseConfigIdentity] = (configIdCounts[baseConfigIdentity] ?? 0) + 1;
-      rowIdentity =
-        configIdCounts[baseConfigIdentity] === 1
-          ? baseConfigIdentity
-          : `${baseConfigIdentity} (${configIdCounts[baseConfigIdentity]})`;
+    if (configTypes.includes(tagType)) {
+      rowIdentity = "GA4 Configuration / Google Tag";
     } else {
       eventNameCounts[baseEventName] = (eventNameCounts[baseEventName] ?? 0) + 1;
       rowIdentity =

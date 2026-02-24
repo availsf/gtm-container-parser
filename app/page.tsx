@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle, Download, Search, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, Download, Search, Settings, XCircle } from "lucide-react";
 import isEqual from "lodash/isEqual";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -54,9 +54,14 @@ const configKeyMap: Record<string, string> = {
   component: "Component Type"
 };
 
-type DiffCompareStatus = "NONE" | "MISSING" | "MATCHED" | "MISMATCHED";
+type DiffCompareStatus = "NONE" | "MISSING" | "MATCHED" | "MISMATCHED" | "IGNORED";
 
-const getDiffStatus = (baselineValue: unknown, comparedValue: unknown): DiffCompareStatus => {
+const IGNORED_PARAM_KEYS = new Set(["measurementId", "tagId", "tag_id"]);
+
+const getDiffStatus = (baselineValue: unknown, comparedValue: unknown, paramKey?: string | null): DiffCompareStatus => {
+  if (paramKey && IGNORED_PARAM_KEYS.has(paramKey)) {
+    return "IGNORED";
+  }
   if (baselineValue === undefined && comparedValue === undefined) {
     return "NONE";
   }
@@ -77,6 +82,8 @@ const getStatusStyles = (status: DiffCompareStatus): string => {
       return "bg-yellow-50 text-yellow-800 border-yellow-200";
     case "MATCHED":
       return "bg-green-50 text-green-800 border-green-200";
+    case "IGNORED":
+      return "bg-slate-50 text-slate-500 border-slate-200 italic";
     default:
       return "bg-transparent text-slate-700 border-slate-100";
   }
@@ -224,6 +231,136 @@ function VariableDefinitionAccordion({
   );
 }
 
+function ComplexParameterDisplay({
+  value,
+  slotIndex,
+  containerVariables,
+  keyPrefix = ""
+}: {
+  value: GTMValue | null | undefined;
+  slotIndex: 0 | 1 | 2;
+  containerVariables: ContainerVariablesState;
+  keyPrefix?: string;
+}) {
+  if (value === undefined || value === null) {
+    return <span className="italic text-slate-400">-</span>;
+  }
+
+  if (typeof value === "string") {
+    const rawTokens = value.match(/{{\s*[^}]+\s*}}/g) ?? [];
+    if (rawTokens.length > 0) {
+      return (
+        <div className="space-y-2">
+          {rawTokens.map((token) => (
+            <VariableDefinitionAccordion
+              key={`${keyPrefix}${slotIndex}-${token}`}
+              originalString={token}
+              slotIndex={slotIndex}
+              containerVariables={containerVariables}
+            />
+          ))}
+        </div>
+      );
+    }
+    return <span className="break-words text-slate-800">{value || "-"}</span>;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return <span className="text-slate-800">{String(value)}</span>;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="italic text-slate-400">Empty list</span>;
+    }
+
+    const isArrayOfObjects = value.every(
+      (item): item is Record<string, GTMValue> => typeof item === "object" && item !== null && !Array.isArray(item)
+    );
+
+    if (isArrayOfObjects) {
+      const allKeys = new Set<string>();
+      for (const item of value) {
+        for (const k of Object.keys(item)) {
+          allKeys.add(k);
+        }
+      }
+      const headers = Array.from(allKeys);
+
+      return (
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr className="bg-slate-100">
+              {headers.map((h) => (
+                <th key={h} className="border border-slate-200 px-2 py-1 text-left font-medium text-slate-600">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {value.map((row, i) => (
+              <tr key={`${keyPrefix}row-${i}`} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                {headers.map((h) => (
+                  <td key={h} className="border border-slate-200 px-2 py-1 text-slate-700">
+                    <ComplexParameterDisplay
+                      value={(row as Record<string, GTMValue>)[h] ?? null}
+                      slotIndex={slotIndex}
+                      containerVariables={containerVariables}
+                      keyPrefix={`${keyPrefix}${i}-${h}-`}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    return (
+      <ul className="list-inside list-disc space-y-1 text-xs">
+        {value.map((item, i) => (
+          <li key={`${keyPrefix}li-${i}`}>
+            <ComplexParameterDisplay
+              value={item}
+              slotIndex={slotIndex}
+              containerVariables={containerVariables}
+              keyPrefix={`${keyPrefix}${i}-`}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, GTMValue>);
+    if (entries.length === 0) {
+      return <span className="italic text-slate-400">Empty object</span>;
+    }
+    return (
+      <div className="space-y-1 rounded border border-slate-200 bg-slate-50/50 p-2 text-xs">
+        {entries.map(([k, v]) => (
+          <div key={`${keyPrefix}${k}`} className="flex gap-2">
+            <span className="shrink-0 font-medium text-slate-600">{k}:</span>
+            <span className="min-w-0 break-words">
+              <ComplexParameterDisplay
+                value={v}
+                slotIndex={slotIndex}
+                containerVariables={containerVariables}
+                keyPrefix={`${keyPrefix}${k}-`}
+              />
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <span className="text-slate-800">{String(value)}</span>;
+}
+
 export default function HomePage() {
   const [containers, setContainers] = useState<ContainerState>([null, null, null]);
   const [containerVariables, setContainerVariables] = useState<ContainerVariablesState>([null, null, null]);
@@ -233,6 +370,8 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEventKey, setSelectedEventKey] = useState<string | null>(null);
   const [modalShowDiffOnly, setModalShowDiffOnly] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsShowDiffOnly, setSettingsShowDiffOnly] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(TOGGLE_STORAGE_KEY);
@@ -318,13 +457,15 @@ export default function HomePage() {
 
         if (containers[1]) {
           const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
-          if (getDiffStatus(baselineVal, slot2Val) !== "MATCHED") {
+          const s2 = getDiffStatus(baselineVal, slot2Val, parameter.parameterKey);
+          if (s2 !== "MATCHED" && s2 !== "IGNORED") {
             hasDifference = true;
           }
         }
         if (containers[2]) {
           const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-          if (getDiffStatus(baselineVal, slot3Val) !== "MATCHED") {
+          const s3 = getDiffStatus(baselineVal, slot3Val, parameter.parameterKey);
+          if (s3 !== "MATCHED" && s3 !== "IGNORED") {
             hasDifference = true;
           }
         }
@@ -347,14 +488,14 @@ export default function HomePage() {
 
         if (compareSlot2) {
           const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
-          const status2 = getDiffStatus(baselineVal, slot2Val);
+          const status2 = getDiffStatus(baselineVal, slot2Val, parameter.parameterKey);
           if (status2 === "MATCHED") matched += 1;
           if (status2 === "MISMATCHED") mismatched += 1;
           if (status2 === "MISSING") missing += 1;
         }
         if (compareSlot3) {
           const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-          const status3 = getDiffStatus(baselineVal, slot3Val);
+          const status3 = getDiffStatus(baselineVal, slot3Val, parameter.parameterKey);
           if (status3 === "MATCHED") matched += 1;
           if (status3 === "MISMATCHED") mismatched += 1;
           if (status3 === "MISSING") missing += 1;
@@ -383,14 +524,14 @@ export default function HomePage() {
 
       if (containers[1]) {
         const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
-        const status2 = getDiffStatus(baselineVal, slot2Val);
+        const status2 = getDiffStatus(baselineVal, slot2Val, parameter.parameterKey);
         if (status2 === "MISMATCHED" || status2 === "MISSING") {
           hasDifference = true;
         }
       }
       if (containers[2]) {
         const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-        const status3 = getDiffStatus(baselineVal, slot3Val);
+        const status3 = getDiffStatus(baselineVal, slot3Val, parameter.parameterKey);
         if (status3 === "MISMATCHED" || status3 === "MISSING") {
           hasDifference = true;
         }
@@ -399,6 +540,34 @@ export default function HomePage() {
       return hasDifference;
     });
   }, [selectedEventRow, modalShowDiffOnly, containers]);
+
+  const settingsGroups = useMemo(() => {
+    const EVENT_SETTINGS_TYPES = new Set(["sme", "gaes"]);
+    type SettingsEntry = { varName: string; data: { type: string } & Record<string, GTMValue> };
+
+    const getSettingsForSlot = (slotIndex: number): SettingsEntry[] => {
+      const vars = containerVariables[slotIndex];
+      if (!vars) return [];
+      return Object.entries(vars)
+        .filter(
+          ([varName, varData]) =>
+            EVENT_SETTINGS_TYPES.has(varData.type) || varName.toLowerCase().includes("event settings")
+        )
+        .map(([varName, varData]) => ({ varName, data: varData }));
+    };
+
+    const s1 = getSettingsForSlot(0);
+    const s2 = getSettingsForSlot(1);
+    const s3 = getSettingsForSlot(2);
+    const maxLen = Math.max(s1.length, s2.length, s3.length);
+
+    return Array.from({ length: maxLen }, (_, i) => ({
+      v1: s1[i] ?? null,
+      v2: s2[i] ?? null,
+      v3: s3[i] ?? null,
+      displayName: s1[i]?.varName ?? s2[i]?.varName ?? s3[i]?.varName ?? "GA4 Event Settings"
+    }));
+  }, [containerVariables]);
 
   const onUpload = (slotIndex: 0 | 1 | 2, fileName: string, fileText: string) => {
     try {
@@ -456,8 +625,8 @@ export default function HomePage() {
         const baselineVal = slot1Cell.value === null ? undefined : slot1Cell.value;
         const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
         const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-        const status2 = containers[1] ? getDiffStatus(baselineVal, slot2Val) : "NOT LOADED";
-        const status3 = containers[2] ? getDiffStatus(baselineVal, slot3Val) : "NOT LOADED";
+        const status2 = containers[1] ? getDiffStatus(baselineVal, slot2Val, parameter.parameterKey) : "NOT LOADED";
+        const status3 = containers[2] ? getDiffStatus(baselineVal, slot3Val, parameter.parameterKey) : "NOT LOADED";
         csvContent += [escapeCsv(row.eventName), escapeCsv(parameter.parameterKey), escapeCsv(status2), escapeCsv(status3)].join(",");
         csvContent += "\n";
       }
@@ -534,6 +703,14 @@ export default function HomePage() {
           >
             <Download className="h-4 w-4" />
             Export Diff to CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSettingsModal(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+          >
+            <Settings className="h-4 w-4" />
+            Audit Event Settings
           </button>
         </div>
       </header>
@@ -677,8 +854,8 @@ export default function HomePage() {
                         const baselineVal = slot1Cell.value === null ? undefined : slot1Cell.value;
                         const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
                         const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-                        const status2 = getDiffStatus(baselineVal, slot2Val);
-                        const status3 = getDiffStatus(baselineVal, slot3Val);
+                        const status2 = getDiffStatus(baselineVal, slot2Val, parameter.parameterKey);
+                        const status3 = getDiffStatus(baselineVal, slot3Val, parameter.parameterKey);
 
                         return (
                           <tr key={`${selectedEventKey}-${parameter.parameterKey}`}>
@@ -722,6 +899,212 @@ export default function HomePage() {
                   </div>
                 ) : null}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSettingsModal ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="h-[90vh] w-[95vw] max-w-[100vw] overflow-y-auto rounded-xl bg-white shadow-2xl xl:max-w-[1600px]">
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">GA4 Event Settings Variables</h2>
+                  <p className="text-sm text-slate-600">
+                    Compare the internal parameters of Event Settings variables across containers.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={settingsShowDiffOnly}
+                      onChange={(event) => setSettingsShowDiffOnly(event.target.checked)}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Show only differences
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowSettingsModal(false)}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                {slotNames.map((name, idx) => (
+                  <div key={`settings-slot-${idx}`} className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                      {name}
+                      {containers[idx] === null ? (
+                        <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] uppercase text-slate-600">
+                          Empty
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-6 p-6">
+              {settingsGroups.length === 0 ? (
+                <p className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center italic text-slate-500">
+                  No Event Settings variables detected across loaded containers.
+                </p>
+              ) : (
+                settingsGroups.map((group, groupIndex) => {
+                  const { v1, v2, v3, displayName } = group;
+                  const d1 = v1?.data ?? null;
+                  const d2 = v2?.data ?? null;
+                  const d3 = v3?.data ?? null;
+
+                  const allParamKeys = new Set<string>();
+                  for (const d of [d1, d2, d3]) {
+                    if (d) {
+                      for (const k of Object.keys(d)) {
+                        if (k !== "type") allParamKeys.add(k);
+                      }
+                    }
+                  }
+
+                  const visibleKeys = Array.from(allParamKeys)
+                    .sort((a, b) => a.localeCompare(b))
+                    .filter((paramKey) => {
+                      if (!settingsShowDiffOnly) return true;
+                      const val1 = d1?.[paramKey] ?? undefined;
+                      if (containers[1]) {
+                        const s2 = getDiffStatus(val1, d2?.[paramKey] ?? undefined, paramKey);
+                        if (s2 === "MISMATCHED" || s2 === "MISSING") return true;
+                      }
+                      if (containers[2]) {
+                        const s3 = getDiffStatus(val1, d3?.[paramKey] ?? undefined, paramKey);
+                        if (s3 === "MISMATCHED" || s3 === "MISSING") return true;
+                      }
+                      return false;
+                    });
+
+                  const varType = d1?.type ?? d2?.type ?? d3?.type;
+
+                  if (settingsShowDiffOnly && visibleKeys.length === 0) {
+                    return (
+                      <div key={groupIndex} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-200 bg-slate-100 px-4 py-2">
+                          <span className="text-sm font-semibold text-slate-900">{displayName}</span>
+                          {varType ? (
+                            <span className="ml-2 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              {varType}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="p-4 text-center text-sm italic text-slate-400">
+                          All parameters match perfectly.
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const renderSettingsCell = (val: unknown, slotIndex: 0 | 1 | 2, paramKey: string) => (
+                    <ComplexParameterDisplay
+                      value={val as GTMValue | null | undefined}
+                      slotIndex={slotIndex}
+                      containerVariables={containerVariables}
+                      keyPrefix={`settings-${groupIndex}-${paramKey}-`}
+                    />
+                  );
+
+                  return (
+                    <div key={groupIndex} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                      <div className="border-b border-slate-200 bg-slate-100 px-4 py-2">
+                        <span className="text-sm font-semibold text-slate-900">{displayName}</span>
+                        {varType ? (
+                          <span className="ml-2 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                            {varType}
+                          </span>
+                        ) : null}
+                        <div className="mt-1 grid gap-2 md:grid-cols-3">
+                          {[v1, v2, v3].map((entry, idx) => (
+                            <span key={`grp-${groupIndex}-slot-${idx}`} className="text-xs text-slate-500">
+                              {slotNames[idx]}:{" "}
+                              <span className="font-medium text-slate-700">{entry?.varName ?? "—"}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200 text-sm">
+                          <thead className="bg-slate-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left font-medium text-slate-600">Parameter</th>
+                              <th className="px-4 py-2 text-left font-medium text-slate-600">{slotNames[0]}</th>
+                              <th className="px-4 py-2 text-left font-medium text-slate-600">{slotNames[1]}</th>
+                              <th className="px-4 py-2 text-left font-medium text-slate-600">{slotNames[2]}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {visibleKeys.map((paramKey) => {
+                              const val1 = d1?.[paramKey] ?? undefined;
+                              const val2 = d2?.[paramKey] ?? undefined;
+                              const val3 = d3?.[paramKey] ?? undefined;
+                              const status2 = getDiffStatus(val1, val2, paramKey);
+                              const status3 = getDiffStatus(val1, val3, paramKey);
+
+                              return (
+                                <tr key={`grp-${groupIndex}-${paramKey}`}>
+                                  <td className="px-4 py-2 font-medium text-slate-800">{paramKey}</td>
+                                  <td className="px-4 py-2 align-top">
+                                    <div className={`rounded-md border px-2 py-1 ${getStatusStyles("NONE")}`}>
+                                      {renderSettingsCell(val1, 0, paramKey)}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2 align-top">
+                                    {containers[1] === null ? (
+                                      <div className="flex items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs italic text-slate-400">
+                                        Not Loaded
+                                      </div>
+                                    ) : (
+                                      <div className={`rounded-md border px-2 py-1 ${getStatusStyles(status2)}`}>
+                                        {status2 === "MISSING" ? (
+                                          <span className="font-semibold uppercase tracking-wide">Missing</span>
+                                        ) : (
+                                          renderSettingsCell(val2, 1, paramKey)
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 align-top">
+                                    {containers[2] === null ? (
+                                      <div className="flex items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs italic text-slate-400">
+                                        Not Loaded
+                                      </div>
+                                    ) : (
+                                      <div className={`rounded-md border px-2 py-1 ${getStatusStyles(status3)}`}>
+                                        {status3 === "MISSING" ? (
+                                          <span className="font-semibold uppercase tracking-wide">Missing</span>
+                                        ) : (
+                                          renderSettingsCell(val3, 2, paramKey)
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        {visibleKeys.length === 0 ? (
+                          <div className="p-4 text-center text-sm italic text-slate-400">
+                            No parameters found for this variable.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
