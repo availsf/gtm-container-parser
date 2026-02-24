@@ -615,20 +615,42 @@ export default function HomePage() {
   };
 
   const exportToCSV = () => {
-    const escapeCsv = (value: unknown): string => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const headers = ["Event Name", "Parameter", `${slotNames[1]} Status`, `${slotNames[2]} Status`];
-    let csvContent = `${headers.map(escapeCsv).join(",")}\n`;
+    const formatForCSV = (val: unknown): string => {
+      if (val === undefined || val === null) return '""';
+      const strVal = typeof val === "object" ? JSON.stringify(val) : String(val);
+      return `"${strVal.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      "Event Name",
+      "Parameter",
+      `${slotNames[0]} (Baseline)`,
+      slotNames[1],
+      `${slotNames[1]} Status`,
+      slotNames[2],
+      `${slotNames[2]} Status`
+    ];
+    let csvContent = `${headers.map(formatForCSV).join(",")}\n`;
 
     for (const row of filteredEventList) {
       for (const parameter of row.parameterDiffs) {
         const [slot1Cell, slot2Cell, slot3Cell] = parameter.cells;
-        const baselineVal = slot1Cell.value === null ? undefined : slot1Cell.value;
-        const slot2Val = slot2Cell.value === null ? undefined : slot2Cell.value;
-        const slot3Val = slot3Cell.value === null ? undefined : slot3Cell.value;
-        const status2 = containers[1] ? getDiffStatus(baselineVal, slot2Val, parameter.parameterKey) : "NOT LOADED";
-        const status3 = containers[2] ? getDiffStatus(baselineVal, slot3Val, parameter.parameterKey) : "NOT LOADED";
-        csvContent += [escapeCsv(row.eventName), escapeCsv(parameter.parameterKey), escapeCsv(status2), escapeCsv(status3)].join(",");
-        csvContent += "\n";
+        const val1 = slot1Cell.value === null ? undefined : slot1Cell.value;
+        const val2 = slot2Cell.value === null ? undefined : slot2Cell.value;
+        const val3 = slot3Cell.value === null ? undefined : slot3Cell.value;
+        const status2 = containers[1] ? getDiffStatus(val1, val2, parameter.parameterKey) : "NOT LOADED";
+        const status3 = containers[2] ? getDiffStatus(val1, val3, parameter.parameterKey) : "NOT LOADED";
+
+        const csvRow = [
+          formatForCSV(row.eventName),
+          formatForCSV(parameter.parameterKey),
+          formatForCSV(val1),
+          containers[1] ? formatForCSV(val2) : '"-"',
+          formatForCSV(status2),
+          containers[2] ? formatForCSV(val3) : '"-"',
+          formatForCSV(status3)
+        ];
+        csvContent += csvRow.join(",") + "\n";
       }
     }
 
