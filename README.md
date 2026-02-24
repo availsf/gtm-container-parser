@@ -1,52 +1,34 @@
-# GTM Container Difference Parser
+# GTM Container Difference Parser (v1.1)
 
-A lightweight, secure, and purely client-side React application built to audit and compare Google Tag Manager (GTM) and GA4 configurations across multiple environments.
+A client-side, purely browser-based React application engineered to audit, diff, and synchronize Google Tag Manager (GTM) and GA4 configurations across multiple environments (e.g., Dev, Staging, Prod).
 
-When managing complex analytics architectures, keeping Dev, Staging, and Production containers synchronized is a massive pain point. This tool solves that by allowing analytics engineers to upload up to three GTM JSON exports and instantly visualize the implementation gaps.
+By uploading exported GTM JSON containers, analytics engineers can instantly visualize tracking gaps, parameter drift, and missing variables without manual line-by-line inspection.
 
-## ✨ Key Features
+## ✨ Core Capabilities
 
-* **Multi-Environment Diffing:** Compare a baseline container (Slot 1) against two other environments (e.g., Staging and Prod) side-by-side.
-* **Deep Equality Engine:** Powered by Lodash, the tool accurately flags tags and parameters as `MATCHED` (Green), `MISMATCHED` (Yellow), or `MISSING` (Red) using deep object comparison.
-* **Smart Noise Reduction:** A "Show only differences" master toggle instantly collapses perfectly matched tags, reducing hundreds of rows down to just the broken parameters.
-* **Intelligent Variable Inspector:** Click on any tag to view its underlying variables. Custom JavaScript is cleanly formatted via Prettier, and variable types are denoted by color-coordinated badges.
-* **Stakeholder-Ready CSV Export:** Generate a filtered CSV diff report of your audit with a single click—perfect for handing off to development teams.
-* **100% Client-Side Processing:** Built for privacy. GTM container JSON files are parsed entirely in the browser. No data is ever sent to a backend server.
+* **Multi-Environment Diffing:** Deep mathematical comparison (via Lodash) of up to 3 containers side-by-side.
+* **Actionable CSV Exports:** Generates stakeholder-ready punch lists detailing exact parameter value differences across environments.
+* **Privacy-First:** 100% client-side processing. No GTM data is ever sent to a server.
 
-## 🛠 Tech Stack
+## 🧠 Smart Auditing Logic (What You Need to Know)
 
-* **Framework:** Next.js (React)
-* **Styling:** Tailwind CSS
-* **Icons:** Lucide React
-* **Diffing Logic:** Lodash (`_.isEqual`)
-* **Code Formatting:** Prettier (Standalone)
+This tool is specifically optimized for GA4 architectures and handles several GTM-specific quirks automatically:
 
-## 🚀 How to Use
+* **Intelligent GA4 Config Alignment:** Dev, Staging, and Prod naturally have different GA4 Measurement IDs. The diffing engine intentionally ignores the `measurementId` parameter, preventing false-positive errors and forcing the Configuration tags to align beautifully side-by-side.
+* **Deep Variable Auditing (The Settings Trap):** It is common for environments to use the same variable name (e.g., `{{GA4 Event Settings}}`) while the contents of that variable drift apart. The parser features a dedicated **Audit Event Settings** engine to inspect and diff the internal parameters of these variables, ensuring your baseline tracking is truly identical.
+* **Legacy Key Normalization:** The parser automatically cleans up older GTM JSON schemas (e.g., merging `event_settings_variable` into `eventSettingsVariable`) so you compare apples to apples.
 
-1. Export your GTM containers from the Google Tag Manager admin panel (Admin > Export Container).
-2. Open the parser and upload your primary/baseline JSON file into **Slot 1**.
-3. Upload your comparison containers into **Slot 2** and/or **Slot 3**.
-4. The application will automatically flatten the GA4 tags and map their parameters.
-5. Use the Search Bar to filter for specific tags (e.g., "purchase"), or toggle "Show only differences" to isolate implementation gaps.
-6. Click **Export Diff to CSV** to download the results.
+## ⚠️ Known Limitations (v1.1)
 
-## 💻 Local Development
+* **Complex Variable UI Rendering:** GTM exports complex variables (like RegEx Tables or Lookup Tables) using a deeply nested, proprietary AST (Abstract Syntax Tree). While the underlying diffing engine mathematically compares these perfectly (and will accurately flag mismatches), the UI may render these complex structures messily or as `[object Object]` in the visual inspector.
+  * **Workaround:** If a complex variable flags as a mismatch, rely on the raw JSON export or the GTM UI to inspect the specific row differences.
 
-To run this project locally:
+## 🚀 Roadmap (v2.0 Enhancements)
 
-```bash
-# Clone the repository
-git clone 
+* **Native AST Parsing:** Implement a recursive un-wrapper to beautifully render deeply nested GTM `list`/`map` arrays directly in the UI.
+* **Direct API Integration:** Bypass JSON file uploads by connecting directly to the Google Tag Manager API via OAuth.
+* **Trigger & Condition Diffing:** Expand the diffing engine beyond Tags and Variables to include Firing Triggers and Custom Event conditions.
 
-# Navigate into the directory
-cd gtm-container-parser
+---
 
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
-Open http://localhost:3000 with your browser to see the result.
-
-📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+Built for the analytics community. Licensed under MIT.
